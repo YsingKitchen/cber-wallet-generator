@@ -658,6 +658,26 @@ class Infractions(InfractionScheduler, commands.Cog):
                 await ctx.send(str(error.errors[0]))
                 error.handled = True
 
+    @commands.Cog.listener()
+    async def on_member_join(self, member: Member) -> None:
+        """
+
+        Apply active timeout infractions for returning members.
+
+        This is needed for users who might have had their infraction edited in our database but not in Discord itself.
+        """
+        active_timeouts = await self.bot.api_client.get(
+            endpoint="bot/infractions",
+            params={"active": "true", "type": "timeout", "user__id": member.id}
+        )
+        if active_timeouts and not member.is_timed_out():
+            reason = f"Applying active timeout for returning member: {active_timeouts[0]['id']}"
+
+        async def action() -> None:
+            await member.edit(timed_out_until=arrow.get(active_timeouts[0]["expires_at"]).datetime, reason=reason)
+        await self.reapply_infraction(active_timeouts[0], action)
+
+
 
 async def setup(bot: Bot) -> None:
     """Load the Infractions cog."""
